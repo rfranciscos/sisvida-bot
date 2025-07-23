@@ -1,0 +1,70 @@
+{
+  "name": "typescript-template",
+  "version": "1.0.0",
+  "description": "A template for Typescript projects",
+  "keywords": [
+    "template",
+    "typescript",
+    "blueprint"
+  ],
+  "homepage": "https://github.com/rfranciscos/typescript-template#readme",
+  "bugs": {
+    "url": "https://github.com/rfranciscos/typescript-template/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rfranciscos/typescript-template.git"
+  },
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint . --ext .ts,.js",
+    "lint:fix": "eslint . --ext .ts --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky install",
+    "pre-commit": "lint-staged",
+    "pre-push": "pnpm test",
+    "bot": "ts-node src/index.ts",
+    "bot:headless": "HEADLESS=true ts-node src/index.ts",
+    "bot:env": "ts-node -r dotenv/config src/index.ts",
+    "bot:patient": "ts-node src/index.ts",
+    "bot:abnormal": "ts-node -e \"import('./src/index').then(m => { const data = { patientId: '290626', hemograma: m.generateAbnormalHemograma() }; console.log('Abnormal hemograma data:', JSON.stringify(data, null, 2)); })\""
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.11.24",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-jest": "^27.9.0",
+    "husky": "^9.0.11",
+    "jest": "^29.7.0",
+    "lint-staged": "^15.2.2",
+    "prettier": "^3.2.5",
+    "ts-jest": "^29.1.2",
+    "ts-node": "10.9.2",
+    "typescript": "^5.3.3"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "prettier --write"
+    ],
+    "*.{js,jsx,json,md}": [
+      "prettier --write"
+    ]
+  },
+  "dependencies": {
+    "dotenv": "17.2.0",
+    "puppeteer": "24.15.0"
+  }
+}
