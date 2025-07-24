@@ -1,0 +1,406 @@
+Apêndice B – Protocolo de comunicação
+Externo (Interface)
+A. Communication Protocol
+Information is transferred by the following methods.
+<SB>information<EB><CR>
+<SB> is Start Block Character needs 1byte corresponds to ASCII <VT>
+hexadecimal 0x0B
+<EB> is End Block Character needs 1byte corresponds to ASCII <FS>
+Hexadecimal 0x1C
+<CR> is Carriage Return needs 1byte corresponds to ASCII <CR>
+hexadecimal 0x0D
+Information is the data that we want to transfer. Please refer to the following for details.
+B. Information Grammar
+1. Delimiter
+| --- Fields Delimiter
+^ --- Component Delimiter
+& --- Subcomponent Delimiter
+~ --- Repeat Delimiter
+\ --- Escape Character
+2. Data Type
+CX extended composite id which check digit
+CE code element
+CM composite
+CQ composite quantity with units
+DR date time range
+DT data
+DLN driver’s license number
+EI entity identifier
+HD hierarchic designator
+FN family name
+FT formatter text
+IS coded value for user-defined tables
+ID coded values for HL7 tables
+JCC job code
+NM numeric
+PT processing type
+PL person location
+ST string
+SI sequence ID
+TS time stamp
+TQ timing quantity
+TX text data
+XAD extended address
+XCN extended composite ID number and name
+XON extended composite name and ID number for organizations
+XPN extended person name
+XTN extended telecommunications number
+VID version identifier
+3. Field Meaning
+3.1. There is a message header at the beginning of each message. It is MSH field.
+The meaning of MSH is shown as below
+Data Type No. Field Length Explanation
+1 Field mark ST 1 Separator
+2 Encoding chars ST 4 Separator listing
+3 Sending Application EI 180 Sending end applications
+4 Sending Facility EI 180 Sending end facility
+5 Receiving
+Application EI 180 Receiving end applications
+6 Receiving Facility EI 180 Receiving end facility
+7 Date Time Message TS 26 Current message event,
+system time
+8 Security ST 40 Security
+9 Message Type CM 7 Message Type
+10 Message Control ID ST 20
+Message control ID is
+used to distinguish
+different messages. See
+the table below.
+11 Processing ID PT 3 Dispose of ID P Product
+12 Version ID VID 60 HL7 version is 2.3.1
+13
+Application
+Acknowledgment
+Type
+IS 1 Set null
+14 Retain
+15 Retain
+16 Retain
+17 Retain
+18 Encoder ST Encoding is UNICODE
+MSH-10 Description
+0001 Analyzer transmits results automatically.
+1001 LIS responses, analyzer transmits results automatically.
+Example: MSH|^~\&|URIT|UT-
+5160|LIS|PC|20100930100436||ORU^R01|0001|P|2.3.1|1|||||UNICODE
+3.2. PID--- Definition of patients' data field
+No. Field Data Type Length Explanation
+1 Set ID PID SI 4 Identify different fields,
+fill with 1 generally.
+2 Patient ID EI 20 Patient ID., hospital
+No., set null
+3 Patient Identifier List CX 20 Indicate batch
+number when QC
+4 Alternate Patient ID CX 20 Bed No.
+5 Patient Name XPN 48 Name
+6 Mother’s Maiden
+Name XPN 48 Mother’s Maiden Name,
+set null
+7 Date/Time of Birth TS 26 8 Sex IS 9 Patient Alias XPN 48 Retain patient alias
+10 11 Patient Address XAD 106 Retain patient address
+12 13 CE County Code Phone Number Birthday；Indicate
+validity when QC
+1 Male or female
+80 4 Retain county code
+Retain phone No.
+Race Retain race
+IS XTN 40 13 Phone Number Bus XTN 40 Retain office phone No.
+14 Primary Language CE 60 Retain mother tongue
+15 Marital Status CE 80 Retain Marital Status
+16 CE …
+Example: PID|1|1010051|A1123145|15|Mary||19811011|M
+3.3. PV1---Definition of patient visiting record field
+No. Religion The rest part is not
+needed to be filled.
+Data Type 80 Retain religion
+Field Length Explanation
+1 Set ID PV1 SI 4 Identify different fields,
+fill with 1 generally.
+2 Patient Class IS 1 Patient category
+3 Assigned Patient
+Location PL 80 Be used to indicate
+patient department
+Example: PV1|1Clinic| Surgery |
+3.4. OBR--- Definition of Doctor's Advice
+No. Field Data Type Length 1 Set ID OBR SI 2 Placer Order Number EI 22 Serial number
+4 Universal Service ID CE 200 Universal service ID
+Explanation
+4 Identify different fields,
+fill with 1 generally.
+3 Assigned Patient
+Location EI 22 Sample number
+5 Priority 6 Requested Date Time ID 2 Priority set null
+TS 26 Application time
+7 Observation Date Time TS 26 Inspection starting time,
+set null
+8 Observation Date Time
+end TS 26 Inspection end time
+9 Collection Volume CQ 20 Specimen collection
+capacity, set null
+10 Collector Identifier XCN 60 Sender name
+11 SPE Action Code ID 1 Sample handling code,
+set null
+12 Danger Code CE 60 Danger code alarm
+13 Relevant Clinical Info ST 200
+"Diagnosis" ^ "Remark",
+each length should not
+be more than 100 bytes
+14 SPE Received Date
+Time TS 26 Sample receiving time
+15 SPE Source CM 300 Sample classification,
+blood, urine etc.
+16 Ordering Provider XCN 120 Inspector name
+17 Order Callback Phone
+Number XTN 40 Callback phone, set null
+18 Placer Field1 ST 60 Sender field 1,
+Inspection department
+19 Placer Field2 ST 60 Set null
+20 Filler Field1 ST 60 Operator field 1, set null
+…
+The rest part is not
+needed to be filled. Set null
+28 Result Copies to XCN 60 Verifier
+Example：
+OBR|1|1010051|000001|URIT^UT-
+5160||20101010093000||20101010093500||sender|||
+diagnosis^remark||BLD|Inspector||||||||||||verifier|
+3.5. OBX
+No. Field Data Type Length Explanation
+1 Set ID OBX SI 4 Identify different fields,
+fill with 1 generally.
+2 Value Type ID 3 NM means figure type,
+ST means value type
+3 Observation Identifier CE 590 Observe identifier name
+4 Observation Sub ID ST 20 Observe sub-id project
+name
+5 Observation value ST 65535 Check result
+6 Units CE 90 Unit
+7 References Range ST 90
+Reference range is from
+small to big, QC means
+reference value and
+deviation.
+8 Abnormal Flags ID 5
+H,L and N indicate high,
+low and normal value
+respectively.
+9 Probability ID 5 Probability, set null
+10 Nature of Abnormal
+Test ID 2
+C indicates WBC and
+RBC clog, B indicates
+bubble, when normal,
+set null
+11 Observe Status ID 1 Observe results, take F
+for final result.
+12 Date Last Observe TS 26 The time for observing
+normal value, set null
+13 User Defined Access
+Checks ST 20 Original results
+Example: OBX|1|NM|WBC||8.21|10^9/L|4.00-10.00|L|||F||
+3.6. MSA
+No. Field Data Type Length Explanation
+1 Acknowledgment Code ID 2
+Confirmation code: AA
+is for receiving, AE for
+error and AR for
+refusing.
+2 Message Control ID ST 20
+3 Text Message ST 80 Message
+4 Expected Sequence
+Number NM 15
+5 Delayed
+Acknowledgment Type ID 1
+6 Error Condition CE 100 Error condition
+MMSA-6 is used to indicate different errors, see the table below.
+MSA-1 MSA-6 MSA-3 False Description
+AA 0 Message accepted Receive successfully
+101 Segment sequence error
+The fields order in message
+is not correct, or the
+necessary fields are lost.
+102 Required field missing Necessary fields of a
+paragraph are lost.
+AE
+103 Data type error
+Data type of fields is false.
+For example, digital is
+changed into character.
+104 Key not found Key identifier is not found
+105 Resend Resend data
+201 Unsupported message
+type Unsupported message type
+202 Unsupported event code Unsupported event code
+203 Unsupported processing
+id Unsupported processing ID
+204 Unsupported version id Unsupported version ID
+AR
+205 Unknown key identifier
+Unknown key identifier，For
+example, transmit an
+inexistent patient
+information.
+206 Duplicate key identifier Duplicate key identifier
+207 Application record
+locked
+Affairs in application storage
+level can't be carried out. For
+example, database is locked
+208 Application internal error Other errors in unknown
+application.
+209 Application unready Application is not ready
+3.7. ERR
+No. Field Data Type Length Explanation
+1 Error Code and
+Location
+CM 80 Code and position error
+ERR-1
+Assembly 1 Assembly 2 Assembly 3 Explanation
+001 Record
+already exist Test tube No. The test tube record has
+already existed.
+002 Lis Recieved
+Failed Test tube No. Lis receiving error, resending
+data is required.
+003 Read REQ
+error
+Test tube No. Fail to read request form.
+004
+Read
+BarCode
+Errer
+Test tube rack No. Analyzer fails to read test
+tube number.
+3.8. QRD
+No. Field Length 2 Query Format Code Data Type 3 Query Priority Explanation
+1 Query Date/Time TS 26 Query time
+ID 1 D （display format）
+ID 1 I（Immediate）
+4 Query ID ST 10
+Distinguish different
+queries ,accumulate with
+query times. The initial
+value is 1.
+ID 1 Set null
+TS 26 Set null
+CQ 10 RD（Records）
+XCN 60 5 Deferred Response
+Type 6 Deferred Response
+Date/Time 7 Quantity Limited
+Request 8 Who Subject Filter What Department
+Data Code CE 60 Set null
+ID 1
+9 What Subject Filter CE 60 OTH
+10 11 12 Take as a test tube code \
+sample number.
+What Data Code
+Value Qual. CM 20 Set null
+Query Results Level 3.9. QRF
+No. Field 1 Where Subject Filter Data Type ST 4 What User Qualifier 5 Other QRY Subject
+Filter 6 Which Date/Time
+Qualifier Length Explanation
+20 Take UT-5160
+2 When Data Start
+Date/Time TS 26 Application time
+3 When Data End
+Date/Time TS 26 Deadline
+ST 60 Set null
+ST 60 Set null
+ID 12 RCT(Specimen receipt
+date/time, receipt of
+specimen in filling
+ancillary (Lab))
+7 Which Date/Time
+Status Qualifier ID 12 ANY(Any status)
+8 Date/Time Selection
+Qualifier ID 12 ALL(All values within
+the range)
+9
+When
+Quantity/Timing
+Qualifier
+TQ 60 Set null
+3.10. QSP
+No. Field Data Type Length Explanation
+1 Set ID - DSP 4 SI
+2 Display Level SI 4
+3 Data Line TX 300 Content queried
+4 Logical Break Point ST 4
+5 Result ID TX 20
+Use QSP-1 to distinguish different queried information in QSP fields.
+1 Sample SN
+2 Name
+3 Gender
+4 Age
+5 Blood type
+6 Group
+7 Patient Number
+8 Bed Number
+9 Patient Type
+10 Department
+11 12 13 14 15 Remark
+16 17 Set ID – DSP Sender
+Inspector
+Auditor
+inspection time
+Message
+BLDV is for venous blood, BLDC is for peripheral blood.
+Sampling time, sending time
+Example
+DSP|1||Mary||<CR>
+4. Communication process
+4.1. Analyzer transmits test results to lis server
+UT-5160 ORU^R01
+Lis
+server
+<SB>
+MSH
+PID
+PV1
+OBR
+OBX
+OBX
+……
+<EB><CR>
+OBX fields can be repeated. Transmitted test results include patient information,
+28 parameters, 2 histograms and 2 scatter plots. The 2 histograms and 2 scatter
+plots are BMP format and transmitted with base64 code.
+For example：
+Analyzer transmits test results to lis server
+<SB>
+MSH|^~\&|URIT|UT-
+5160|LIS|PC|20110627144458||ORU^R01|0001|P|2.3.1||||||UNICODE<CR>
+PID|1||||||||<CR>
+PV1|1|||<CR>
+OBR|1||BAR101010101|URIT^UT-5160||||01110621143134|||||^||||||||||||||||<CR>
+OBX|1|NM|WBC||110.0|10^9/L|40.0-100.0|H|||F|||||||<CR>
+OBX|2|NM|LYM||35.57|%|20.00-40.00||||F|||||||<CR>
+OBX|3|NM|MON||5.84|%|3.00-8.00||||F|||||||<CR>
+OBX|4|NM|NEU||57.37|%|50.00-70.00||||F|||||||<CR>
+OBX|5|NM|EOS||1.14|%|0.50-5.00||||F|||||||<CR>
+OBX|6|NM|BASO||0.08|%|0.00-1.00||||F|||||||<CR>
+OBX|7|NM|LYM#||284.5|10^9/L|80.0-400.0||||F|||||||<CR>
+OBX|8|NM|MON#||46.7|10^9/L|10.0-80.0||||F|||||||<CR>
+OBX|9|NM|NEU#||458.9|10^9/L|200.0-700.0||||F|||||||<CR>
+OBX|10|NM|EOS#||9.1|10^9/L|0.0-50.0||||F|||||||<CR>
+OBX|11|NM|BASO#||0.6|10^9/L|0.0-10.0||||F|||||||<CR>
+OBX|12|NM|RBC||4.49|10^12/L|3.50-5.50||||F|||||||<CR>
+OBX|13|NM|HGB||0|g/L|0-1079738368|L|||F|||||||<CR>
+OBX|14|NM|HCT||26.4|%|37.0-50.0|L|||F|||||||<CR>
+OBX|15|NM|MCV||59.0|fL|80.0-100.0|L|||F|||||||<CR>
+OBX|16|NM|MCH||24.0|pg|27.0-31.0|L|||F|||||||<CR>
+OBX|17|NM|MCHC||0|g/L|0-1081344000|H|||F|||||||<CR>
+OBX|18|NM|RDW_CV||16.1|%|11.5-14.5|H|||F||||||<CR>
+OBX|19|NM|RDW_SD||45.0|fL|35.0-56.0||||F||||||<CR>
+OBX|20|NM|PLT||0|10^9/L|0-1079574528|H|||F|||||||<CR>
+OBX|21|NM|MPV||12.3|fL|7.0-11.0|H|||F|||||||<CR>
+OBX|22|NM|PDW||14.7|fL|15.0-17.0|L|||F|||||||<CR>
+OBX|23|NM|PCT||0.41|%|0.10-0.28|H|||F|||||||<CR>
+OBX|24|NM|P_LCR||1.37|%|0.50-1.80||||F|||||||<CR>
+OBX|25|ED|RBCHistogram||UT5160^Image^BMP^Base64^Qk32lgMAAA……<CR>
+OBX|26|ED|PLTHistogram||UT5160^Image^BMP^Base64^Qk32lgMAAA……<CR>
+OBX|27|ED|S0_S10DIFFScattergram||UT5160^Image^BMP^Base64^Qk32lgMAAA
+……<CR>
+OBX|28|ED|S90_S90DDIFFScattergram||UT5160^Image^BMP^Base64^Qk32lgMAA
+A……<CR>
+<EB><CR>

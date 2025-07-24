@@ -37,7 +37,11 @@
     "bot:headless": "HEADLESS=true ts-node src/index.ts",
     "bot:env": "ts-node -r dotenv/config src/index.ts",
     "bot:patient": "ts-node src/index.ts",
-    "bot:abnormal": "ts-node -e \"import('./src/index').then(m => { const data = { patientId: '290626', hemograma: m.generateAbnormalHemograma() }; console.log('Abnormal hemograma data:', JSON.stringify(data, null, 2)); })\""
+    "bot:abnormal": "ts-node -e \"import('./src/index').then(m => { const data = { patientId: '290626', hemograma: m.generateAbnormalHemograma() }; console.log('Abnormal hemograma data:', JSON.stringify(data, null, 2)); })\"",
+    "server": "ts-node src/integrated-server.ts",
+    "server:headless": "HEADLESS=true ts-node src/integrated-server.ts",
+    "server:env": "ts-node -r dotenv/config src/integrated-server.ts",
+    "test-client": "ts-node src/test-client.ts"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",
