@@ -1,0 +1,59 @@
+services:
+  urit-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: urit-5160-server
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=production
+      - TCP_PORT=8080
+      - HEADLESS=true
+      # These should be overridden with actual values
+      - SISVIDA_USERNAME=${SISVIDA_USERNAME:-teste}
+      - SISVIDA_PASSWORD=${SISVIDA_PASSWORD:-teste}
+    volumes:
+      # Mount screenshots directory for debugging
+      - ./screenshots:/app/screenshots
+      # Mount logs directory
+      - ./logs:/app/logs
+    networks:
+      - urit-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('net').createConnection(8080, 'localhost', () => process.exit(0)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
+    tmpfs:
+      - /tmp
+      - /var/tmp
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+
+
+
+networks:
+  urit-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  screenshots:
+  logs: 

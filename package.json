@@ -41,7 +41,13 @@
     "server": "ts-node src/integrated-server.ts",
     "server:headless": "HEADLESS=true ts-node src/integrated-server.ts",
     "server:env": "ts-node -r dotenv/config src/integrated-server.ts",
-    "test-client": "ts-node src/test-client.ts"
+    "test-client": "ts-node src/test-client.ts",
+    "docker:build": "docker build -t urit-5160-server .",
+    "docker:run": "docker run -p 8080:8080 --env-file .env urit-5160-server",
+    "docker:compose": "docker-compose up -d",
+    "docker:logs": "docker-compose logs -f",
+    "docker:down": "docker-compose down",
+    "docker:clean": "docker system prune -f"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",
