@@ -20,6 +20,8 @@ services:
       - ./screenshots:/app/screenshots
       # Mount logs directory
       - ./logs:/app/logs
+      # Mount data directory for persistence
+      - ./data:/app/data
     networks:
       - urit-network
     healthcheck:

@@ -47,7 +47,8 @@
     "docker:compose": "docker-compose up -d",
     "docker:logs": "docker-compose logs -f",
     "docker:down": "docker-compose down",
-    "docker:clean": "docker system prune -f"
+    "docker:clean": "docker system prune -f",
+    "cli": "ts-node src/cli.ts"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",
