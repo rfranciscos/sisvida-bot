@@ -5,18 +5,18 @@ WORKDIR /app
 # Copy application dependency manifests to the container image.
 # A wildcard is used to ensure both package.json AND package-lock.json are copied.
 # Copying this separately prevents re-running npm install on every code change.
-COPY package*.json ./
+COPY package*.json pnpm-workspace.yaml ./
+COPY pnpm-lock.yaml* ./
 
-# Install dependencies.
-# If you add a package-lock.json speed your build by switching to 'npm ci'.
-# --ignore-scripts is used to prevent the postinstall or prepare scripts from running
-RUN npm ci --ignore-scripts
+# Install pnpm and dependencies
+RUN npm install -g pnpm@latest && \
+    pnpm install --frozen-lockfile
 
 # Copy local code to the container image.
 COPY . ./
 
 # Build app
-RUN npm run build
+RUN pnpm run build
 
 # Run the web service on container startup.
-CMD ["npm", "start"]
+CMD ["node", "dist/integrated-server.js"] 
