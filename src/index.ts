@@ -307,6 +307,10 @@ export class SisvidaBot {
     } catch (error) {
       console.log('Form submission completed (no navigation detected)');
     }
+    
+    // Close the browser after successful form submission
+    console.log('Closing browser...');
+    await this.close();
   }
 
   async takeScreenshot(filename: `${string}.png` | `${string}.jpeg` | `${string}.webp` = 'sisvida-login.png') {

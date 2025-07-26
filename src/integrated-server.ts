@@ -39,8 +39,10 @@ export class IntegratedServer {
   }
 
   private async processURITMessage(message: HL7Message) {
+
+    // console.log('Processing URIT message:', message);``
     // Extract patient information
-    const patientId = message.pid?.patientId || message.obr?.placerOrderNumber || 'UNKNOWN';
+    const patientId = message.pid?.patientId || message.obr?.universalServiceId || 'UNKNOWN';
     
     // Extract hemograma data from OBX segments
     const hemogramaData = extractHemogramaData(message.obx);
@@ -84,6 +86,14 @@ export class IntegratedServer {
         await this.sisvidaBot.takeScreenshot(`error-${patientId}-${Date.now()}.png`);
       } catch (screenshotError) {
         console.error('Error taking screenshot:', screenshotError);
+      }
+      
+      // Close browser even on error to ensure clean state for next message
+      try {
+        await this.sisvidaBot.close();
+        console.log('Browser closed after error');
+      } catch (closeError) {
+        console.error('Error closing browser:', closeError);
       }
     }
   }
