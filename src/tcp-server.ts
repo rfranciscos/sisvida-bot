@@ -25,7 +25,7 @@ export interface MSHSegment {
 }
 
 export interface PIDSegment {
-  patientId: string;
+  sampleId: string;
   patientName: string;
   dateOfBirth: string;
   sex: string;
@@ -149,7 +149,7 @@ export class URIT5160Server extends EventEmitter {
       const fields = segment.split('|');
       const segmentType = fields[0];
       
-      console.log(`Processing segment type: ${segmentType}`);
+      // console.log(`Processing segment type: ${segmentType}`);
       
       switch (segmentType) {
         case 'MSH':
@@ -198,7 +198,7 @@ export class URIT5160Server extends EventEmitter {
 
   private parsePID(fields: string[]): PIDSegment {
     return {
-      patientId: fields[2] || '',
+      sampleId: fields[5] || '',  // Use field 5 (959775) as sample ID
       patientName: fields[4] || '',
       dateOfBirth: fields[6] || '',
       sex: fields[7] || ''

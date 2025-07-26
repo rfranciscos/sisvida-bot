@@ -10,7 +10,7 @@ interface HemogramaData {
 }
 
 interface PatientData {
-  patientId: string | number;
+  sampleId: string | number;
   hemograma: HemogramaData;
 }
 
@@ -222,9 +222,19 @@ export class SisvidaBot {
       throw new Error('Browser not launched. Call launch() first.');
     }
 
-    const { patientId, hemograma } = patientData;
+    // Check if the page is still valid
+    try {
+      await this.page.url(); // This will throw if page is detached
+    } catch (error) {
+      throw new Error('Browser page is detached. Need to restart browser.');
+    }
+
+    const { sampleId, hemograma } = patientData;
     
-    console.log(`Navigating to patient results page for ID: ${patientId}`);
+    // First, search for the patient ID using the sample ID
+    const patientId = await this.searchPatientBySampleId(sampleId);
+    
+    console.log(`Navigating to patient results page for patient ID: ${patientId} (sample ID: ${sampleId})`);
     await this.page.goto(`https://lacer.sisvida.com.br/lancar_resultados/atendimentos/lancar/${patientId}`, {
       waitUntil: 'networkidle2',
       timeout: 30000
@@ -313,6 +323,81 @@ export class SisvidaBot {
     await this.close();
   }
 
+  async searchPatientBySampleId(sampleId: string | number): Promise<string> {
+    if (!this.page) {
+      throw new Error('Browser not launched. Call launch() first.');
+    }
+
+    // Check if the page is still valid
+    try {
+      await this.page.url(); // This will throw if page is detached
+    } catch (error) {
+      throw new Error('Browser page is detached. Need to restart browser.');
+    }
+
+    console.log(`Searching for patient with sample ID: ${sampleId}`);
+    
+    // Navigate to the patient list page
+    await this.page.goto('https://lacer.sisvida.com.br/lancar_resultados/atendimentos/list', {
+      waitUntil: 'networkidle2',
+      timeout: 30000
+    });
+
+    console.log('Waiting for patient list page to load...');
+    
+    // Wait for the filter input to be ready
+    await this.page.waitForSelector('#filter_etiquetas_atendimento\\.id', { timeout: 15000 });
+    
+    console.log('Filling sample ID in filter...');
+    
+    // Clear and fill the sample ID filter
+    await this.page.click('#filter_etiquetas_atendimento\\.id');
+    await this.page.keyboard.down('Control');
+    await this.page.keyboard.press('KeyA');
+    await this.page.keyboard.up('Control');
+    await this.page.type('#filter_etiquetas_atendimento\\.id', sampleId.toString());
+    
+    console.log('Clicking filter button...');
+    
+    // Click the filter button
+    await this.page.click('button.button[type="submit"]');
+
+    // Wait for the results to load and ensure we have exactly 1 result
+    console.log('Waiting for filtered results...');
+    await this.page.waitForFunction(() => {
+      const doc = (globalThis as any).document;
+      const rows = doc.querySelectorAll('.lista table tbody tr.item');
+      return rows.length === 1;
+    }, { timeout: 15000 });
+
+    console.log('Filter results loaded with 1 row as expected');
+    
+    console.log('Extracting patient ID from search results...');
+    
+    // Extract the patient ID from the first column of the first row
+    const patientId = await this.page.evaluate(() => {
+      const doc = (globalThis as any).document;
+      const firstRow = doc.querySelector('.lista table tbody tr.item');
+      if (!firstRow) {
+        throw new Error('No results found for the sample ID');
+      }
+      
+      const firstCell = firstRow.querySelector('td:first-child');
+      if (!firstCell) {
+        throw new Error('Could not find patient ID in the results');
+      }
+      
+      return firstCell.textContent?.trim() || '';
+    });
+
+    if (!patientId) {
+      throw new Error(`No patient found for sample ID: ${sampleId}`);
+    }
+
+    console.log(`Found patient ID: ${patientId} for sample ID: ${sampleId}`);
+    return patientId;
+  }
+
   async takeScreenshot(filename: `${string}.png` | `${string}.jpeg` | `${string}.webp` = 'sisvida-login.png') {
     if (!this.page) {
       throw new Error('Browser not launched. Call launch() first.');
@@ -325,6 +410,8 @@ export class SisvidaBot {
   async close() {
     if (this.browser) {
       await this.browser.close();
+      this.browser = null;
+      this.page = null;
       console.log('Browser closed.');
     }
   }
@@ -380,19 +467,19 @@ if (require.main === module) {
       // Parse JSON from command line argument
       const patientData: PatientData = JSON.parse(args[0]);
       console.log('Patient data received:', { 
-        patientId: patientData.patientId, 
+        sampleId: patientData.sampleId, 
         hemogramaKeys: Object.keys(patientData.hemograma) 
       });
       main(patientData).catch(console.error);
     } catch (error) {
       console.error('Error parsing patient data JSON:', error);
-      console.log('Usage: pnpm run bot \'{"patientId": "290626", "hemograma": {"HMC01": "45.2", "HGB01": "14.5"}}\'');
+      console.log('Usage: pnpm run bot \'{"sampleId": "290626", "hemograma": {"HMC01": "45.2", "HGB01": "14.5"}}\'');
       process.exit(1);
     }
   } else {
     // Generate realistic hemograma data for testing
     const patientData: PatientData = {
-      patientId: '290626',
+      sampleId: '290626',
       // hemograma: generateRealisticHemograma()
       hemograma: {
         HMC01: 5.01,
@@ -419,7 +506,7 @@ if (require.main === module) {
     };
     
     console.log('No patient data provided. Using generated realistic hemograma data:');
-    console.log('Patient ID:', patientData.patientId);
+    console.log('Sample ID:', patientData.sampleId);
     console.log('Generated hemograma values:');
     for (const [codigo, valor] of Object.entries(patientData.hemograma)) {
       const range = HEMOGRAMA_RANGES[codigo as keyof typeof HEMOGRAMA_RANGES];
