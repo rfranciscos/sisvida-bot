@@ -130,6 +130,9 @@ screenshots
 *.jpg
 *.jpeg
 
+# Data directory (will be created at runtime)
+data/
+
 # TypeScript source maps
 *.map
 
