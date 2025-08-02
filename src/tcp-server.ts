@@ -25,7 +25,7 @@ export interface MSHSegment {
 }
 
 export interface PIDSegment {
-  patientId: string;
+  sampleId: string;
   patientName: string;
   dateOfBirth: string;
   sex: string;
@@ -106,6 +106,7 @@ export class URIT5160Server extends EventEmitter {
           buffer = buffer.substring(messageEnd + 2);
           
                      try {
+                      console.log('Parsing HL7 message:', message);
              const parsedMessage = this.parseHL7Message(message);
              this.emit('message', parsedMessage);
              
@@ -137,12 +138,18 @@ export class URIT5160Server extends EventEmitter {
   }
 
   private parseHL7Message(message: string): HL7Message {
-    const segments = message.split('\r').filter(segment => segment.trim());
+    // Handle different line endings: \r\n, \r, or \n
+    const segments = message.split(/\r\n|\r|\n/).filter(segment => segment.trim());
     const parsedMessage: HL7Message = { msh: {} as MSHSegment, obx: [] };
+    
+    // console.log(`Found ${segments.length} segments`);
+    // console.log('First few segments:', segments.slice(0, 5));
     
     for (const segment of segments) {
       const fields = segment.split('|');
       const segmentType = fields[0];
+      
+      // console.log(`Processing segment type: ${segmentType}`);
       
       switch (segmentType) {
         case 'MSH':
@@ -158,7 +165,10 @@ export class URIT5160Server extends EventEmitter {
           parsedMessage.obr = this.parseOBR(fields);
           break;
         case 'OBX':
-          parsedMessage.obx.push(this.parseOBX(fields));
+          // console.log(`Processing OBX segment: ${segment}`);
+          const obxData = this.parseOBX(fields);
+          // console.log(`Parsed OBX data:`, obxData);
+          parsedMessage.obx.push(obxData);
           break;
         case 'MSA':
           parsedMessage.msa = this.parseMSA(fields);
@@ -188,7 +198,7 @@ export class URIT5160Server extends EventEmitter {
 
   private parsePID(fields: string[]): PIDSegment {
     return {
-      patientId: fields[2] || '',
+      sampleId: fields[5] || '',  // Use field 5 (959775) as sample ID
       patientName: fields[4] || '',
       dateOfBirth: fields[6] || '',
       sex: fields[7] || ''
@@ -311,7 +321,16 @@ export class URIT5160Server extends EventEmitter {
 
 // Utility function to extract hemograma data from OBX segments
 export function extractHemogramaData(obxSegments: OBXSegment[]): Record<string, string> {
-  const hemogramaData: Record<string, string> = {};
+  const hemogramaData: Record<string, string> = {
+    'BTN01': '0.0',
+    'LAT01': '0.0',
+    'ERITR': '0.0',
+    'PRO01': '0.0',
+    'MIE01': '0.0',
+    'MTM01': '0.0',
+    'BLAST': '0.0',
+    'CELAT': '0.0',
+  };
   
   for (const obx of obxSegments) {
     if (obx.valueType === 'NM' && obx.observationValue) {
@@ -324,18 +343,22 @@ export function extractHemogramaData(obxSegments: OBXSegment[]): Record<string, 
         'RDW_CV': 'RDW01',
         'PLT': 'PTL01',
         'MPV': 'VPM01',
-        'LYM': 'LIN01',
-        'MON': 'MON01',
-        'NEU': 'SEG01',
-        'EOS': 'EOS01',
-        'BASO': 'BSF01'
+        'LYM%': 'LIN01',
+        'MON%': 'MON01',
+        'NEU%': 'SEG01',
+        'EOS%': 'EOS01',
+        'BASO%': 'BSF01'
       };
       
       const uritCode = obx.observationIdentifier;
       const sisvidaCode = parameterMapping[uritCode];
       
       if (sisvidaCode) {
-        hemogramaData[sisvidaCode] = obx.observationValue;
+        if(['PTL01', 'LEU01'].includes(sisvidaCode)) {
+          hemogramaData[sisvidaCode] = (Number(obx.observationValue) * 1000).toFixed(0);
+        } else {
+          hemogramaData[sisvidaCode] = obx.observationValue;
+        }
       }
     }
   }

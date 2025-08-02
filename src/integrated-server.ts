@@ -54,14 +54,9 @@ export class IntegratedServer {
   }
 
   private async processURITMessage(message: HL7Message) {
-    // Save raw message first
-    const messageId = await this.dataPersistence.saveRawMessage(
-      JSON.stringify(message), // Store as string for now
-      message
-    );
-
-    // Extract patient information
-    const patientId = message.pid?.patientId || message.obr?.placerOrderNumber || 'UNKNOWN';
+    // console.log('Processing URIT message:', message);
+    // Extract sample/test ID information
+    const sampleId = message.pid?.sampleId || message.obr?.universalServiceId || 'UNKNOWN';
     
     // Extract hemograma data from OBX segments
     const hemogramaData = extractHemogramaData(message.obx);
@@ -72,12 +67,12 @@ export class IntegratedServer {
       return;
     }
 
-    console.log(`Processing hemograma for patient: ${patientId}`);
-    console.log('Extracted hemograma data:', hemogramaData);
+    console.log(`Processing hemograma for sample: ${sampleId}`);
+    // console.log('Extracted hemograma data:', hemogramaData);
 
-    // Create patient data object
+    // Create patient data object (using sampleId for the test)
     const patientData = {
-      patientId,
+      sampleId,
       hemograma: hemogramaData
     };
 
@@ -99,26 +94,29 @@ export class IntegratedServer {
       // Fill hemograma form
       await this.sisvidaBot.fillHemogramaForm(patientData);
 
-      // Update status to completed
-      await this.dataPersistence.updateMessageStatus(messageId, 'completed');
-
-      console.log(`Successfully processed hemograma for patient ${patientId}`);
+      console.log(`Successfully processed hemograma for sample ${sampleId}`);
 
     } catch (error) {
-      console.error(`Error processing hemograma for patient ${patientId}:`, error);
+      console.error(`Error processing hemograma for sample ${sampleId}:`, error);
       
-      // Update status to failed
-      await this.dataPersistence.updateMessageStatus(
-        messageId, 
-        'failed', 
-        error instanceof Error ? error.message : String(error)
-      );
-      
-      // Take screenshot for debugging
+      // Try to take screenshot for debugging (only if browser is still accessible)
       try {
-        await this.sisvidaBot.takeScreenshot(`error-${patientId}-${Date.now()}.png`);
+        // Check if browser is still running before attempting screenshot
+        if (this.sisvidaBot['browser'] && this.sisvidaBot['page']) {
+          await this.sisvidaBot.takeScreenshot(`error-${sampleId}-${Date.now()}.png`);
+        } else {
+          console.log('Browser not accessible for screenshot');
+        }
       } catch (screenshotError) {
         console.error('Error taking screenshot:', screenshotError);
+      }
+      
+      // Close browser even on error to ensure clean state for next message
+      try {
+        await this.sisvidaBot.close();
+        console.log('Browser closed after error');
+      } catch (closeError) {
+        console.error('Error closing browser:', closeError);
       }
     }
   }
