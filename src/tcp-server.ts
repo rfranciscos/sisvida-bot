@@ -448,33 +448,79 @@ export class URIT8031Server extends EventEmitter {
       );
 
       let buffer = '';
+      let currentMessage = '';
+      let messageStarted = false;
+      let messageTimeout: NodeJS.Timeout | null = null;
+
+      const processCurrentMessage = () => {
+        if (messageStarted && currentMessage.trim()) {
+          this.processCompleteMessage(currentMessage, socket);
+          currentMessage = '';
+          messageStarted = false;
+        }
+        if (messageTimeout) {
+          clearTimeout(messageTimeout);
+          messageTimeout = null;
+        }
+      };
 
       socket.on('data', (data: Buffer) => {
         buffer += data.toString('utf8');
 
-        // Process complete messages (separated by line endings for URIT-8031)
-        while (buffer.includes('\r') || buffer.includes('\n')) {
-          let messageEnd = buffer.indexOf('\r');
-          if (messageEnd === -1) messageEnd = buffer.indexOf('\n');
-          
-          const message = buffer.substring(0, messageEnd);
-          buffer = buffer.substring(messageEnd + 1);
+        // Process complete messages - accumulate until we have a complete HL7 message
+        const lines = buffer.split(/\r\n|\r|\n/);
+        buffer = lines.pop() || ''; // Keep the last incomplete line in buffer
 
-          if (message.trim()) {
-            try {
-              console.log('Parsing URIT-8031 HL7 message:', message);
-              const parsedMessage = this.parseHL7Message(message);
-              this.emit('message', parsedMessage);
+        for (const line of lines) {
+          const trimmedLine = line.trim();
+          if (!trimmedLine) continue;
 
-              // Send acknowledgment
-              const ack = this.createAcknowledgment(
-                parsedMessage.msh.messageControlId
-              );
-              socket.write(ack);
-            } catch (error) {
-              console.error('Error parsing URIT-8031 HL7 message:', error);
-              const nack = this.createNegativeAcknowledgment('UNKNOWN', '103');
-              socket.write(nack);
+          // Skip special characters that are not part of HL7 segments
+          if (trimmedLine === '∟' || trimmedLine.startsWith('♂')) {
+            // Process the complete message if we have one
+            processCurrentMessage();
+            continue;
+          }
+
+          // Start of a new message (MSH segment)
+          if (trimmedLine.startsWith('MSH|')) {
+            // If we have a previous message, process it
+            processCurrentMessage();
+            // Start new message
+            currentMessage = trimmedLine + '\r';
+            messageStarted = true;
+            
+            // Set timeout to process message if no explicit end marker comes
+            if (messageTimeout) clearTimeout(messageTimeout);
+            messageTimeout = setTimeout(() => {
+              if (messageStarted && currentMessage.trim()) {
+                // Check if we have at least MSH and an OBX segment (minimum viable message)
+                const segments = currentMessage.split('\r').filter(s => s.trim());
+                const hasOBX = segments.some(s => s.startsWith('OBX|'));
+                if (segments.length >= 2 && hasOBX) { // MSH + at least one OBX
+                  console.log('Processing message via timeout - has', segments.length, 'segments');
+                  processCurrentMessage();
+                }
+              }
+            }, 500); // 500ms timeout
+            
+          } else if (messageStarted && (trimmedLine.startsWith('PID|') || trimmedLine.startsWith('OBR|') || trimmedLine.startsWith('OBX|'))) {
+            // Continue building current message with valid HL7 segments
+            currentMessage += trimmedLine + '\r';
+            
+            // If this is an OBX segment and we seem to have a complete basic message, 
+            // reset timeout to be more aggressive
+            if (trimmedLine.startsWith('OBX|')) {
+              if (messageTimeout) clearTimeout(messageTimeout);
+              messageTimeout = setTimeout(() => {
+                if (messageStarted && currentMessage.trim()) {
+                  const segments = currentMessage.split('\r').filter(s => s.trim());
+                  if (segments.length >= 2) { // We have at least MSH + this OBX
+                    console.log('Processing message after OBX received - has', segments.length, 'segments');
+                    processCurrentMessage();
+                  }
+                }
+              }, 100); // Much shorter timeout after OBX
             }
           }
         }
@@ -488,6 +534,21 @@ export class URIT8031Server extends EventEmitter {
         console.log(
           `URIT-8031 analyzer disconnected from ${socket.remoteAddress}:${socket.remotePort}`
         );
+        // Process any remaining complete message before closing
+        if (messageStarted && currentMessage.trim()) {
+          // Check if we have at least MSH and one data segment (OBX)
+          const segments = currentMessage.split('\r').filter(s => s.trim());
+          const hasOBX = segments.some(s => s.startsWith('OBX|'));
+          if (segments.length >= 2 && hasOBX) {
+            console.log('Processing final message on disconnect');
+            this.processCompleteMessage(currentMessage, socket);
+          }
+        }
+        // Clean up timeout
+        if (messageTimeout) {
+          clearTimeout(messageTimeout);
+          messageTimeout = null;
+        }
       });
     });
 
@@ -495,6 +556,24 @@ export class URIT8031Server extends EventEmitter {
       console.error('Server error:', error);
       this.emit('error', error);
     });
+  }
+
+  private processCompleteMessage(message: string, socket: net.Socket) {
+    try {
+      console.log('Parsing URIT-8031 HL7 message:', message);
+      const parsedMessage = this.parseHL7Message(message);
+      this.emit('message', parsedMessage);
+
+      // Send acknowledgment
+      const ack = this.createAcknowledgment(
+        parsedMessage.msh.messageControlId
+      );
+      socket.write(ack);
+    } catch (error) {
+      console.error('Error parsing URIT-8031 HL7 message:', error);
+      const nack = this.createNegativeAcknowledgment('UNKNOWN', '103');
+      socket.write(nack);
+    }
   }
 
   private parseHL7Message(message: string): HL7Message {
@@ -582,8 +661,8 @@ export class URIT8031Server extends EventEmitter {
     return {
       setId: fields[1] || '',
       valueType: fields[2] || '',
-      observationIdentifier: fields[3] || '',
-      observationSubId: fields[4] || '',
+      observationIdentifier: fields[4] || '', // Field 4 contains the parameter code (GLI, ALT, etc.)
+      observationSubId: fields[3] || '',      // Field 3 contains the sequence number
       observationValue: fields[5] || '',
       units: fields[6] || '',
       referencesRange: fields[7] || '',
