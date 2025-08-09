@@ -66,7 +66,7 @@ export class DataPersistence {
       parsedMessage,
       status: 'pending',
       retryCount: 0,
-      patientId: parsedMessage.pid?.patientId || parsedMessage.obr?.placerOrderNumber || 'UNKNOWN'
+      patientId: parsedMessage.pid?.sampleId || parsedMessage.obr?.placerOrderNumber || 'UNKNOWN'
     };
 
     const filePath = path.join(this.pendingDir, `${messageId}.json`);

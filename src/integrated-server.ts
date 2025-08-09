@@ -63,7 +63,6 @@ export class IntegratedServer {
     
     if (Object.keys(hemogramaData).length === 0) {
       console.log('No hemograma data found in message');
-      await this.dataPersistence.updateMessageStatus(messageId, 'failed', 'No hemograma data found');
       return;
     }
 
@@ -77,9 +76,6 @@ export class IntegratedServer {
     };
 
     try {
-      // Update status to processing
-      await this.dataPersistence.updateMessageStatus(messageId, 'processing');
-
       // Launch browser if not already running
       if (!this.sisvidaBot['browser']) {
         const headless = process.env['HEADLESS'] === 'true';
