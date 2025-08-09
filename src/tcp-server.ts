@@ -344,7 +344,6 @@ export function extractHemogramaData(
     CELAT: '0.0',
   };
 
-  console.log('Extracting hemograma data from OBX segments:', obxSegments);
   for (const obx of obxSegments) {
     if (obx.valueType === 'NM' && obx.observationValue) {
       // Map URIT-5160 parameters to Sisvida codes
@@ -364,7 +363,7 @@ export function extractHemogramaData(
         MCV: 'VGMX5',
         MCH: 'HGMX5',
         MCHC: 'CHMX5',
-        '*NRBC%': '',
+        'NRBC%': 'ERITR',
       };
 
       const uritCode = obx.observationIdentifier;
