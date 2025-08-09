@@ -421,6 +421,7 @@ export class SisvidaBot {
     }
 
     console.log('Starting to fill biochemistry form...');
+    console.log(patientData.biochemistry);
     
     // Search for patient by sample ID first
     console.log(`Searching for patient with sample ID: ${patientData.sampleId}`);
