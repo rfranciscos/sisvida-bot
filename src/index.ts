@@ -14,6 +14,39 @@ interface PatientData {
   hemograma: HemogramaData;
 }
 
+// Mapping of setor names to their values from the HTML form
+const SETOR_VALUES: { [key: string]: string } = {
+  'A1C': '33',
+  'ANALISE DE ÁGUA': '20',
+  'APOIO': '9',
+  'BIOPSIA': '45',
+  'BIOQUÍMICA': '1',
+  'BIOQUIMICA -GLICOSE': '35',
+  'BIOQUIMICA 2': '40',
+  'CITOLOGIA': '39',
+  'DESCARTE': '41',
+  'ESPERMOGRAMA': '46',
+  'HEMATOLOGIA': '34',
+  'Hematologia automatizada': '47',
+  'IMUNO-HEMATOLOGIA': '36',
+  'IMUNOLOGIA': '4',
+  'MICROBIOLOGIA': '8',
+  'NA- K': '37',
+  'PARASITOLOGIA': '7',
+  'RETICULÓCITOS': '44',
+  'TIPAGEM SANGUÍNEA': '38',
+  'UROANALISE': '6'
+};
+
+// Helper function to get setor value by name
+function getSetorValue(setorName: string): string {
+  const value = SETOR_VALUES[setorName];
+  if (!value) {
+    throw new Error(`Unknown setor: ${setorName}. Available setors: ${Object.keys(SETOR_VALUES).join(', ')}`);
+  }
+  return value;
+}
+
 // Hemograma reference ranges based on the form
 const HEMOGRAMA_RANGES = {
   HMC01: { min: 4.40, max: 5.80, unit: 'milhões/mm³' },
@@ -231,8 +264,8 @@ export class SisvidaBot {
 
     const { sampleId, hemograma } = patientData;
     
-    // First, search for the patient ID using the sample ID
-    const patientId = await this.searchPatientBySampleId(sampleId);
+    // First, search for the patient ID using the sample ID with HEMATOLOGIA setor filter
+    const patientId = await this.searchPatientBySampleId(sampleId, 'HEMATOLOGIA');
     
     console.log(`Navigating to patient results page for patient ID: ${patientId} (sample ID: ${sampleId})`);
     await this.page.goto(`https://lacer.sisvida.com.br/lancar_resultados/atendimentos/lancar/${patientId}`, {
@@ -323,7 +356,7 @@ export class SisvidaBot {
     await this.close();
   }
 
-  async searchPatientBySampleId(sampleId: string | number): Promise<string> {
+  async searchPatientBySampleId(sampleId: string | number, setor?: string): Promise<string> {
     if (!this.page) {
       throw new Error('Browser not launched. Call launch() first.');
     }
@@ -335,7 +368,8 @@ export class SisvidaBot {
       throw new Error('Browser page is detached. Need to restart browser.');
     }
 
-    console.log(`Searching for patient with sample ID: ${sampleId}`);
+    const setorText = setor ? ` and setor: ${setor}` : '';
+    console.log(`Searching for patient with sample ID: ${sampleId}${setorText}`);
     
     // Navigate to the patient list page
     await this.page.goto('https://lacer.sisvida.com.br/lancar_resultados/atendimentos/list', {
@@ -345,8 +379,9 @@ export class SisvidaBot {
 
     console.log('Waiting for patient list page to load...');
     
-    // Wait for the filter input to be ready
+    // Wait for the filter inputs to be ready
     await this.page.waitForSelector('#filter_etiquetas_atendimento\\.id', { timeout: 15000 });
+    await this.page.waitForSelector('#filter_setor_id', { timeout: 15000 });
     
     console.log('Filling sample ID in filter...');
     
@@ -356,6 +391,12 @@ export class SisvidaBot {
     await this.page.keyboard.press('KeyA');
     await this.page.keyboard.up('Control');
     await this.page.type('#filter_etiquetas_atendimento\\.id', sampleId.toString());
+    
+    // If setor is provided, select it from the dropdown
+    if (setor) {
+      console.log(`Selecting setor: ${setor}`);
+      await this.page.select('#filter_setor_id', getSetorValue(setor));
+    }
     
     console.log('Clicking filter button...');
     

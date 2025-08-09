@@ -124,7 +124,7 @@ export class RetryProcessor extends EventEmitter {
 
       // Create patient data object
       const patientData = {
-        patientId: message.patientId || 'UNKNOWN',
+        sampleId: message.patientId || 'UNKNOWN',
         hemograma: hemogramaData
       };
 
