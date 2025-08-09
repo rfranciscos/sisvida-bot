@@ -250,6 +250,60 @@ export class SisvidaBot {
     console.log('Login form submitted successfully!');
   }
 
+  private async clearAndFillInput(inputElement: any, value: string): Promise<void> {
+    try {
+      // Focus on the input field
+      await inputElement.focus();
+      
+      // Clear the field using multiple methods for maximum reliability
+      
+      // Method 1: Select all and delete
+      await this.page!.keyboard.down('Control');
+      await this.page!.keyboard.press('KeyA');
+      await this.page!.keyboard.up('Control');
+      await this.page!.keyboard.press('Delete');
+      
+      // Method 2: Clear using input.value if method 1 didn't work
+      const currentValue = await inputElement.evaluate((el: any) => el.value);
+      if (currentValue && currentValue.trim() !== '') {
+        await inputElement.evaluate((el: any) => {
+          el.value = '';
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+      }
+      
+      // Method 3: Use backspace to clear any remaining characters
+      const valueAfterClear = await inputElement.evaluate((el: any) => el.value);
+      if (valueAfterClear && valueAfterClear.trim() !== '') {
+        for (let i = 0; i < valueAfterClear.length; i++) {
+          await this.page!.keyboard.press('Backspace');
+        }
+      }
+      
+      // Small delay to ensure field is cleared
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Type the new value
+      await inputElement.type(value, { delay: 50 });
+      
+      // Verify the value was set correctly
+      const finalValue = await inputElement.evaluate((el: any) => el.value);
+      if (finalValue !== value) {
+        console.warn(`Warning: Expected value "${value}" but got "${finalValue}"`);
+        // Try one more time with direct value setting
+        await inputElement.evaluate((el: any, val: string) => {
+          el.value = val;
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+        }, value);
+      }
+      
+    } catch (error) {
+      throw new Error(`Failed to clear and fill input: ${error}`);
+    }
+  }
+
   async fillHemogramaForm(patientData: PatientData) {
     if (!this.page) {
       throw new Error('Browser not launched. Call launch() first.');
@@ -315,12 +369,8 @@ export class SisvidaBot {
           throw new Error(`Input element not found for código ${codigo}`);
         }
         
-        // Clear and fill the input
-        await targetInput.click();
-        await this.page.keyboard.down('Control');
-        await this.page.keyboard.press('KeyA');
-        await this.page.keyboard.up('Control');
-        await targetInput.type(valor.toString());
+        // Clear and fill the input with improved cleanup
+        await this.clearAndFillInput(targetInput, valor.toString());
         
         console.log(`✓ ${codigo} filled successfully`);
         
@@ -385,12 +435,12 @@ export class SisvidaBot {
     
     console.log('Filling sample ID in filter...');
     
-    // Clear and fill the sample ID filter
-    await this.page.click('#filter_etiquetas_atendimento\\.id');
-    await this.page.keyboard.down('Control');
-    await this.page.keyboard.press('KeyA');
-    await this.page.keyboard.up('Control');
-    await this.page.type('#filter_etiquetas_atendimento\\.id', sampleId.toString());
+    // Clear and fill the sample ID filter using improved cleanup
+    const sampleIdInput = await this.page.$('#filter_etiquetas_atendimento\\.id');
+    if (!sampleIdInput) {
+      throw new Error('Sample ID filter input not found');
+    }
+    await this.clearAndFillInput(sampleIdInput, sampleId.toString());
     
     // If setor is provided, select it from the dropdown
     if (setor) {
