@@ -11,7 +11,8 @@ interface HemogramaData {
 
 interface PatientData {
   sampleId: string | number;
-  hemograma: HemogramaData;
+  hemograma?: HemogramaData;
+  biochemistry?: Record<string, string>;
 }
 
 // Mapping of setor names to their values from the HTML form
@@ -309,6 +310,10 @@ export class SisvidaBot {
       throw new Error('Browser not launched. Call launch() first.');
     }
 
+    if (!patientData.hemograma) {
+      throw new Error('No hemograma data provided');
+    }
+
     // Check if the page is still valid
     try {
       await this.page.url(); // This will throw if page is detached
@@ -370,7 +375,7 @@ export class SisvidaBot {
         }
         
         // Clear and fill the input with improved cleanup
-        await this.clearAndFillInput(targetInput, valor.toString());
+        await this.clearAndFillInput(targetInput, valor.toString().replace('.', ''));
         
         console.log(`✓ ${codigo} filled successfully`);
         
@@ -397,6 +402,83 @@ export class SisvidaBot {
         this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 10000 })
       ]);
       console.log('Form saved successfully!');
+    } catch (error) {
+      console.log('Form submission completed (no navigation detected)');
+    }
+    
+    // Close the browser after successful form submission
+    console.log('Closing browser...');
+    await this.close();
+  }
+
+  async fillBiochemistryForm(patientData: PatientData) {
+    if (!this.page) {
+      throw new Error('Browser not launched. Call launch() first.');
+    }
+
+    if (!patientData.biochemistry) {
+      throw new Error('No biochemistry data provided');
+    }
+
+    console.log('Starting to fill biochemistry form...');
+    
+    // Search for patient by sample ID first
+    console.log(`Searching for patient with sample ID: ${patientData.sampleId}`);
+    const patientUrl = await this.searchPatientBySampleId(patientData.sampleId, 'BIOQUÍMICA');
+    
+    console.log(`Found patient, navigating to: ${patientUrl}`);
+    await this.page.goto(patientUrl, {
+      waitUntil: 'networkidle2',
+      timeout: 30000
+    });
+
+    // Wait for the biochemistry form to load
+    console.log('Waiting for biochemistry form to load...');
+    await this.page.waitForSelector('input[type="text"], input[type="number"]', { timeout: 10000 });
+
+    // Fill biochemistry values
+    console.log('Filling biochemistry values...');
+    
+    for (const [codigo, valor] of Object.entries(patientData.biochemistry)) {
+      try {
+        console.log(`Attempting to fill ${codigo} with value: ${valor}`);
+        
+        // Look for input field with the biochemistry code
+        const targetInput = await this.page.$(`input[name*="${codigo}"], input[id*="${codigo}"]`);
+        
+        if (!targetInput) {
+          console.warn(`⚠ Input element not found for código ${codigo}`);
+          continue;
+        }
+        
+        // Clear and fill the input
+        await this.clearAndFillInput(targetInput, valor.toString());
+        
+        console.log(`✓ ${codigo} filled successfully`);
+        
+      } catch (error) {
+        console.warn(`⚠ Could not fill ${codigo}: ${error}`);
+      }
+    }
+    
+    console.log('Biochemistry form filled successfully!');
+    
+    // Click the "Salvar" button to save the form
+    console.log('Clicking "Salvar" button...');
+    await this.page.click('input.record_button.salvar[type="submit"][value="Salvar"]');
+    
+    // Wait a moment for the form submission to process
+    console.log('Waiting for form submission to complete...');
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    // Check if there's a success message or if we're still on the same page
+    try {
+      // Wait for either a success message or navigation
+      await Promise.race([
+        this.page.waitForSelector('.success, .alert-success, .message-success', { timeout: 10000 }),
+        this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 10000 })
+      ]);
+      console.log('Biochemistry form saved successfully!');
     } catch (error) {
       console.log('Form submission completed (no navigation detected)');
     }
@@ -559,7 +641,8 @@ if (require.main === module) {
       const patientData: PatientData = JSON.parse(args[0]);
       console.log('Patient data received:', { 
         sampleId: patientData.sampleId, 
-        hemogramaKeys: Object.keys(patientData.hemograma) 
+        hemogramaKeys: patientData.hemograma ? Object.keys(patientData.hemograma) : [],
+        biochemistryKeys: patientData.biochemistry ? Object.keys(patientData.biochemistry) : []
       });
       main(patientData).catch(console.error);
     } catch (error) {
@@ -599,9 +682,11 @@ if (require.main === module) {
     console.log('No patient data provided. Using generated realistic hemograma data:');
     console.log('Sample ID:', patientData.sampleId);
     console.log('Generated hemograma values:');
-    for (const [codigo, valor] of Object.entries(patientData.hemograma)) {
-      const range = HEMOGRAMA_RANGES[codigo as keyof typeof HEMOGRAMA_RANGES];
-      console.log(`  ${codigo}: ${valor} ${range.unit} (normal: ${range.min}-${range.max})`);
+    if (patientData.hemograma) {
+      for (const [codigo, valor] of Object.entries(patientData.hemograma)) {
+        const range = HEMOGRAMA_RANGES[codigo as keyof typeof HEMOGRAMA_RANGES];
+        console.log(`  ${codigo}: ${valor} ${range.unit} (normal: ${range.min}-${range.max})`);
+      }
     }
     
     main(patientData).catch(console.error);

@@ -383,3 +383,296 @@ export function extractHemogramaData(
 
   return hemogramaData;
 }
+
+// URIT-8031 Server class for biochemistry analyzer
+export class URIT8031Server extends EventEmitter {
+  private server: net.Server;
+  private port: number;
+  private isRunning: boolean = false;
+
+  constructor(port: number = 3001) {
+    super();
+    this.port = port;
+    this.server = net.createServer();
+    this.setupEventHandlers();
+  }
+
+  public start(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (this.isRunning) {
+        resolve();
+        return;
+      }
+
+      this.server.listen(this.port, () => {
+        this.isRunning = true;
+        console.log(`URIT-8031 TCP Server listening on port ${this.port}`);
+        this.emit('started');
+        resolve();
+      });
+
+      this.server.on('error', error => {
+        reject(error);
+      });
+    });
+  }
+
+  public stop(): Promise<void> {
+    return new Promise(resolve => {
+      if (!this.isRunning) {
+        resolve();
+        return;
+      }
+
+      this.server.close(() => {
+        this.isRunning = false;
+        console.log('URIT-8031 TCP Server stopped');
+        this.emit('stopped');
+        resolve();
+      });
+    });
+  }
+
+  public isServerRunning(): boolean {
+    return this.isRunning;
+  }
+
+  public getPort(): number {
+    return this.port;
+  }
+
+  private setupEventHandlers() {
+    this.server.on('connection', (socket: net.Socket) => {
+      console.log(
+        `URIT-8031 analyzer connected from ${socket.remoteAddress}:${socket.remotePort}`
+      );
+
+      let buffer = '';
+
+      socket.on('data', (data: Buffer) => {
+        buffer += data.toString('utf8');
+
+        // Process complete messages (separated by line endings for URIT-8031)
+        while (buffer.includes('\r') || buffer.includes('\n')) {
+          let messageEnd = buffer.indexOf('\r');
+          if (messageEnd === -1) messageEnd = buffer.indexOf('\n');
+          
+          const message = buffer.substring(0, messageEnd);
+          buffer = buffer.substring(messageEnd + 1);
+
+          if (message.trim()) {
+            try {
+              console.log('Parsing URIT-8031 HL7 message:', message);
+              const parsedMessage = this.parseHL7Message(message);
+              this.emit('message', parsedMessage);
+
+              // Send acknowledgment
+              const ack = this.createAcknowledgment(
+                parsedMessage.msh.messageControlId
+              );
+              socket.write(ack);
+            } catch (error) {
+              console.error('Error parsing URIT-8031 HL7 message:', error);
+              const nack = this.createNegativeAcknowledgment('UNKNOWN', '103');
+              socket.write(nack);
+            }
+          }
+        }
+      });
+
+      socket.on('error', error => {
+        console.error('Socket error:', error);
+      });
+
+      socket.on('close', () => {
+        console.log(
+          `URIT-8031 analyzer disconnected from ${socket.remoteAddress}:${socket.remotePort}`
+        );
+      });
+    });
+
+    this.server.on('error', error => {
+      console.error('Server error:', error);
+      this.emit('error', error);
+    });
+  }
+
+  private parseHL7Message(message: string): HL7Message {
+    // Handle different line endings: \r\n, \r, or \n
+    const segments = message
+      .split(/\r\n|\r|\n/)
+      .filter(segment => segment.trim());
+    const parsedMessage: HL7Message = { msh: {} as MSHSegment, obx: [] };
+
+    for (const segment of segments) {
+      const fields = segment.split('|');
+      const segmentType = fields[0];
+
+      switch (segmentType) {
+        case 'MSH':
+          parsedMessage.msh = this.parseMSH(fields);
+          break;
+        case 'PID':
+          parsedMessage.pid = this.parsePID(fields);
+          break;
+        case 'PV1':
+          parsedMessage.pv1 = this.parsePV1(fields);
+          break;
+        case 'OBR':
+          parsedMessage.obr = this.parseOBR(fields);
+          break;
+        case 'OBX':
+          const obxData = this.parseOBX(fields);
+          parsedMessage.obx.push(obxData);
+          break;
+        case 'MSA':
+          parsedMessage.msa = this.parseMSA(fields);
+          break;
+        case 'ERR':
+          parsedMessage.err = this.parseERR(fields);
+          break;
+      }
+    }
+
+    return parsedMessage;
+  }
+
+  private parseMSH(fields: string[]): MSHSegment {
+    return {
+      sendingApplication: fields[2] || '',
+      sendingFacility: fields[3] || '',
+      receivingApplication: fields[4] || '',
+      receivingFacility: fields[5] || '',
+      dateTime: fields[6] || '',
+      messageType: fields[8] || '',
+      messageControlId: fields[9] || '',
+      processingId: fields[10] || '',
+      versionId: fields[11] || '',
+    };
+  }
+
+  private parsePID(fields: string[]): PIDSegment {
+    return {
+      sampleId: fields[1] || '', // URIT-8031 uses field 1 for sample ID
+      patientName: fields[4] || '',
+      dateOfBirth: fields[6] || '',
+      sex: fields[7] || '',
+    };
+  }
+
+  private parsePV1(fields: string[]): PV1Segment {
+    return {
+      patientClass: fields[1] || '',
+      assignedPatientLocation: fields[2] || '',
+    };
+  }
+
+  private parseOBR(fields: string[]): OBRSegment {
+    return {
+      placerOrderNumber: fields[1] || '',
+      universalServiceId: fields[3] || '',
+      requestedDateTime: fields[5] || '',
+      relevantClinicalInfo: fields[12] || '',
+      specimenSource: fields[14] || '',
+      orderingProvider: fields[15] || '',
+    };
+  }
+
+  private parseOBX(fields: string[]): OBXSegment {
+    return {
+      setId: fields[1] || '',
+      valueType: fields[2] || '',
+      observationIdentifier: fields[3] || '',
+      observationSubId: fields[4] || '',
+      observationValue: fields[5] || '',
+      units: fields[6] || '',
+      referencesRange: fields[7] || '',
+      abnormalFlags: fields[8] || '',
+      observationStatus: fields[10] || '',
+    };
+  }
+
+  private parseMSA(fields: string[]): MSASegment {
+    return {
+      acknowledgmentCode: fields[1] || '',
+      messageControlId: fields[2] || '',
+      textMessage: fields[3] || '',
+      errorCondition: fields[6] || '',
+    };
+  }
+
+  private parseERR(fields: string[]): ERRSegment {
+    const errorCode = fields[1] || '';
+    const result: ERRSegment = { errorCode };
+
+    if (errorCode === '001' || errorCode === '002' || errorCode === '003') {
+      result.testTubeNo = fields[2];
+    }
+
+    if (errorCode === '004') {
+      result.testTubeRackNo = fields[2];
+    }
+
+    return result;
+  }
+
+  private createAcknowledgment(messageControlId: string): string {
+    const msh = `MSH|^~\\&|LIS|PC|URIT|8031|${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}||ACK^R01|ACK${Date.now()}|P|2.3.1||||||ASCII\r`;
+    const msa = `MSA|AA|${messageControlId}\r`;
+    return `${msh}${msa}`;
+  }
+
+  private createNegativeAcknowledgment(
+    messageControlId: string,
+    errorCode: string
+  ): string {
+    const msh = `MSH|^~\\&|LIS|PC|URIT|8031|${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}||ACK^R01|ACK${Date.now()}|P|2.3.1||||||ASCII\r`;
+    const msa = `MSA|AE|${messageControlId}\r`;
+    const err = `ERR||${errorCode}\r`;
+    return `${msh}${msa}${err}`;
+  }
+}
+
+// Utility function to extract biochemistry data from URIT-8031 OBX segments
+export function extractBiochemistryData(
+  obxSegments: OBXSegment[]
+): Record<string, string> {
+  const biochemistryData: Record<string, string> = {};
+
+  for (const obx of obxSegments) {
+    if (obx.valueType === 'NM' && obx.observationValue) {
+      // Map URIT-8031 parameters to Sisvida codes
+      const parameterMapping: Record<string, string> = {
+        GLI: 'GLI01',     // Glucose
+        ALT: 'ALT01',     // Alanine Aminotransferase
+        AST: 'AST01',     // Aspartate Aminotransferase  
+        CRE: 'CRE01',     // Creatinine
+        URE: 'URE01',     // Urea
+        COL: 'COL01',     // Total Cholesterol
+        TRI: 'TRI01',     // Triglycerides
+        ALB: 'ALB01',     // Albumin
+        BIL: 'BIL01',     // Total Bilirubin
+        HDL: 'HDL01',     // HDL Cholesterol
+        LDL: 'LDL01',     // LDL Cholesterol
+        ALP: 'ALP01',     // Alkaline Phosphatase
+        GGT: 'GGT01',     // Gamma-Glutamyl Transferase
+        LDH: 'LDH01',     // Lactate Dehydrogenase
+        AMY: 'AMY01',     // Amylase
+        LIP: 'LIP01',     // Lipase
+        CK: 'CK01',       // Creatine Kinase
+        UA: 'UA01',       // Uric Acid
+        TP: 'TP01',       // Total Protein
+        GLO: 'GLO01'      // Globulins
+      };
+
+      const uritCode = obx.observationIdentifier;
+      const sisvidaCode = parameterMapping[uritCode];
+
+      if (sisvidaCode) {
+        biochemistryData[sisvidaCode] = obx.observationValue;
+      }
+    }
+  }
+
+  return biochemistryData;
+}

@@ -1,4 +1,4 @@
-import { URIT5160Server, extractHemogramaData, HL7Message } from './tcp-server';
+import { URIT5160Server, URIT8031Server, extractHemogramaData, extractBiochemistryData, HL7Message } from './tcp-server';
 import { SisvidaBot } from './index';
 import { DataPersistence } from './data-persistence';
 import { RetryProcessor } from './retry-processor';
@@ -8,14 +8,16 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 export class IntegratedServer {
-  private uritServer: URIT5160Server;
+  private urit5160Server: URIT5160Server;
+  private urit8031Server: URIT8031Server;
   private sisvidaBot: SisvidaBot;
   private dataPersistence: DataPersistence;
   private retryProcessor: RetryProcessor;
   private isRunning: boolean = false;
 
-  constructor(tcpPort: number = 8080) {
-    this.uritServer = new URIT5160Server(tcpPort);
+  constructor(urit5160Port: number = 8080, urit8031Port: number = 8081) {
+    this.urit5160Server = new URIT5160Server(urit5160Port);
+    this.urit8031Server = new URIT8031Server(urit8031Port);
     this.sisvidaBot = new SisvidaBot();
     this.dataPersistence = new DataPersistence();
     this.retryProcessor = new RetryProcessor(this.dataPersistence, this.sisvidaBot);
@@ -24,23 +26,43 @@ export class IntegratedServer {
 
   private setupEventHandlers() {
     // Handle URIT-5160 messages
-    this.uritServer.on('message', async (message: HL7Message) => {
+    this.urit5160Server.on('message', async (message: HL7Message) => {
       console.log('Received URIT-5160 message:', message.msh.messageControlId);
       
       try {
-        await this.processURITMessage(message);
+        await this.processHemogramaMessage(message);
       } catch (error) {
-        console.error('Error processing URIT message:', error);
+        console.error('Error processing URIT-5160 message:', error);
       }
     });
 
-    // Handle server events
-    this.uritServer.on('started', () => {
+    // Handle URIT-8031 messages  
+    this.urit8031Server.on('message', async (message: HL7Message) => {
+      console.log('Received URIT-8031 message:', message.msh.messageControlId);
+      
+      try {
+        await this.processBiochemistryMessage(message);
+      } catch (error) {
+        console.error('Error processing URIT-8031 message:', error);
+      }
+    });
+
+    // Handle URIT-5160 server events
+    this.urit5160Server.on('started', () => {
       console.log('URIT-5160 server started successfully');
     });
 
-    this.uritServer.on('error', (error) => {
+    this.urit5160Server.on('error', (error) => {
       console.error('URIT-5160 server error:', error);
+    });
+
+    // Handle URIT-8031 server events
+    this.urit8031Server.on('started', () => {
+      console.log('URIT-8031 server started successfully');
+    });
+
+    this.urit8031Server.on('error', (error) => {
+      console.error('URIT-8031 server error:', error);
     });
 
     // Handle retry processor events
@@ -53,7 +75,7 @@ export class IntegratedServer {
     });
   }
 
-  private async processURITMessage(message: HL7Message) {
+  private async processHemogramaMessage(message: HL7Message) {
     // console.log('Processing URIT message:', message);
     // Extract sample/test ID information
     const sampleId = message.pid?.sampleId || message.obr?.universalServiceId || 'UNKNOWN';
@@ -117,6 +139,68 @@ export class IntegratedServer {
     }
   }
 
+  private async processBiochemistryMessage(message: HL7Message) {
+    // Extract sample/test ID information
+    const sampleId = message.pid?.sampleId || message.obr?.universalServiceId || 'UNKNOWN';
+    
+    // Extract biochemistry data from OBX segments
+    const biochemistryData = extractBiochemistryData(message.obx);
+    
+    if (Object.keys(biochemistryData).length === 0) {
+      console.log('No biochemistry data found in message');
+      return;
+    }
+
+    console.log(`Processing biochemistry for sample: ${sampleId}`);
+    console.log('Extracted biochemistry data:', biochemistryData);
+
+    // Create patient data object with biochemistry results
+    const patientData = {
+      sampleId,
+      biochemistry: biochemistryData
+    };
+
+    try {
+      // Launch browser if not already running
+      if (!this.sisvidaBot['browser']) {
+        const headless = process.env['HEADLESS'] === 'true';
+        await this.sisvidaBot.launch(headless);
+      }
+
+      // Login to Sisvida
+      const username = process.env['SISVIDA_USERNAME'] || 'teste';
+      const password = process.env['SISVIDA_PASSWORD'] || 'teste';
+      await this.sisvidaBot.login(username, password);
+
+      // Fill biochemistry form (need to implement this method)
+      await this.sisvidaBot.fillBiochemistryForm(patientData);
+
+      console.log(`Successfully processed biochemistry for sample ${sampleId}`);
+
+    } catch (error) {
+      console.error(`Error processing biochemistry for sample ${sampleId}:`, error);
+      
+      // Try to take screenshot for debugging
+      try {
+        if (this.sisvidaBot['browser'] && this.sisvidaBot['page']) {
+          await this.sisvidaBot.takeScreenshot(`error-biochemistry-${sampleId}-${Date.now()}.png`);
+        } else {
+          console.log('Browser not accessible for screenshot');
+        }
+      } catch (screenshotError) {
+        console.error('Error taking screenshot:', screenshotError);
+      }
+      
+      // Close browser even on error to ensure clean state for next message
+      try {
+        await this.sisvidaBot.close();
+        console.log('Browser closed after error');
+      } catch (closeError) {
+        console.error('Error closing browser:', closeError);
+      }
+    }
+  }
+
   public async start(): Promise<void> {
     if (this.isRunning) {
       console.log('Integrated server is already running');
@@ -130,12 +214,14 @@ export class IntegratedServer {
       // Start retry processor
       await this.retryProcessor.start();
       
-      // Start URIT-5160 TCP server
-      await this.uritServer.start();
+      // Start both URIT TCP servers
+      await this.urit5160Server.start();
+      await this.urit8031Server.start();
       
       this.isRunning = true;
       console.log('Integrated server started successfully');
-      console.log(`URIT-5160 TCP Server listening on port ${this.uritServer.getPort()}`);
+      console.log(`URIT-5160 TCP Server listening on port ${this.urit5160Server.getPort()}`);
+      console.log(`URIT-8031 TCP Server listening on port ${this.urit8031Server.getPort()}`);
       console.log('Data persistence and retry processor initialized');
       console.log('Waiting for analyzer messages...');
       
@@ -155,8 +241,9 @@ export class IntegratedServer {
       // Stop retry processor
       await this.retryProcessor.stop();
       
-      // Stop URIT-5160 server
-      await this.uritServer.stop();
+      // Stop both URIT servers
+      await this.urit5160Server.stop();
+      await this.urit8031Server.stop();
       
       // Close Sisvida bot browser
       await this.sisvidaBot.close();
@@ -171,11 +258,15 @@ export class IntegratedServer {
   }
 
   public isServerRunning(): boolean {
-    return this.isRunning && this.uritServer.isServerRunning();
+    return this.isRunning && this.urit5160Server.isServerRunning() && this.urit8031Server.isServerRunning();
   }
 
-  public getURITServer(): URIT5160Server {
-    return this.uritServer;
+  public getURIT5160Server(): URIT5160Server {
+    return this.urit5160Server;
+  }
+
+  public getURIT8031Server(): URIT8031Server {
+    return this.urit8031Server;
   }
 
   public getSisvidaBot(): SisvidaBot {
@@ -193,8 +284,9 @@ export class IntegratedServer {
 
 // Main function to run the integrated server
 async function main() {
-  const port = parseInt(process.env['TCP_PORT'] || '8080');
-  const server = new IntegratedServer(port);
+  const urit5160Port = parseInt(process.env['URIT5160_PORT'] || '8080');
+  const urit8031Port = parseInt(process.env['URIT8031_PORT'] || '8081');
+  const server = new IntegratedServer(urit5160Port, urit8031Port);
 
   // Handle graceful shutdown
   process.on('SIGINT', async () => {

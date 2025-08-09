@@ -1,0 +1,125 @@
+URIT-8031 Biochemistry Analyzer Communication Protocol
+
+The URIT-8031 is a biochemistry analyzer that sends test results via HL7 v2.3.1 protocol.
+
+Sample HL7 Message Format:
+MSH|^~\&|urit|8030|||20250809123926||ORU^R01|202508090002|P|2.3.1||||0||ASCII|||
+PID|1||||||0|||||0|||||||||||||||||||
+OBR|1|0000966134|202508090002|urit^8030|N||2025-08-09|||||||||||||||||||||||||||||||||||||||
+OBX|1|NM|1|GLI|111|mg/dL|65-99|N|||F||0.2441|2025-08-09||Admin||
+
+Message Structure:
+1. MSH (Message Header):
+   - Field separator: |
+   - Encoding characters: ^~\&
+   - Sending Application: urit
+   - Sending Facility: 8030 (or 8031)
+   - Date/Time: YYYYMMDDHHMMSS format
+   - Message Type: ORU^R01 (Observational Result)
+   - Message Control ID: Unique identifier
+   - Processing ID: P (Production)
+   - Version ID: 2.3.1
+   - Character Set: ASCII
+
+2. PID (Patient Identification):
+   - Set ID: 1
+   - Patient ID: Used for sample identification
+   - Additional fields are mostly empty for analyzer use
+
+3. OBR (Observation Request):
+   - Set ID: 1
+   - Placer Order Number: Sample identifier (e.g., 0000966134)
+   - Filler Order Number: Same as message control ID
+   - Universal Service ID: urit^8030 or urit^8031
+   - Priority: N (Normal)
+   - Requested Date/Time: Date of analysis
+
+4. OBX (Observation Result):
+   - Set ID: Sequential number (1, 2, 3...)
+   - Value Type: NM (Numeric)
+   - Observation Identifier: Parameter code (GLI, ALT, AST, etc.)
+   - Observation Sub ID: Sequential ID
+   - Observation Value: Test result value
+   - Units: mg/dL, U/L, etc.
+   - Reference Range: Normal range (e.g., 65-99)
+   - Abnormal Flags: N (Normal), H (High), L (Low)
+   - Observation Status: F (Final)
+   - Date Last Observation Normal: Date
+   - User Defined Access Checks: Additional info
+   - Date/Time of Observation: When test was performed
+   - Producer's ID: Operator (Admin)
+
+Supported Biochemistry Parameters:
+- GLI: Glucose (mg/dL)
+- ALT: Alanine Aminotransferase (U/L)
+- AST: Aspartate Aminotransferase (U/L)
+- CRE: Creatinine (mg/dL)
+- URE: Urea (mg/dL)
+- COL: Total Cholesterol (mg/dL)
+- TRI: Triglycerides (mg/dL)
+- ALB: Albumin (g/dL)
+- BIL: Total Bilirubin (mg/dL)
+- HDL: HDL Cholesterol (mg/dL)
+- LDL: LDL Cholesterol (mg/dL)
+- ALP: Alkaline Phosphatase (U/L)
+- GGT: Gamma-Glutamyl Transferase (U/L)
+- LDH: Lactate Dehydrogenase (U/L)
+- AMY: Amylase (U/L)
+- LIP: Lipase (U/L)
+- CK: Creatine Kinase (U/L)
+- UA: Uric Acid (mg/dL)
+- TP: Total Protein (g/dL)
+- GLO: Globulins (g/dL)
+
+Parameter Mapping to Sisvida Codes:
+URIT-8031 Code -> Sisvida Code
+GLI -> GLI01 (Glucose)
+ALT -> ALT01 (Alanine Aminotransferase)
+AST -> AST01 (Aspartate Aminotransferase)
+CRE -> CRE01 (Creatinine)
+URE -> URE01 (Urea)
+COL -> COL01 (Total Cholesterol)
+TRI -> TRI01 (Triglycerides)
+ALB -> ALB01 (Albumin)
+BIL -> BIL01 (Total Bilirubin)
+HDL -> HDL01 (HDL Cholesterol)
+LDL -> LDL01 (LDL Cholesterol)
+ALP -> ALP01 (Alkaline Phosphatase)
+GGT -> GGT01 (Gamma-Glutamyl Transferase)
+LDH -> LDH01 (Lactate Dehydrogenase)
+AMY -> AMY01 (Amylase)
+LIP -> LIP01 (Lipase)
+CK -> CK01 (Creatine Kinase)
+UA -> UA01 (Uric Acid)
+TP -> TP01 (Total Protein)
+GLO -> GLO01 (Globulins)
+
+Communication Process:
+1. URIT-8031 establishes TCP connection to server (default port 8081)
+2. Analyzer sends HL7 message with test results
+3. Server parses message and extracts biochemistry data
+4. Server maps URIT parameters to Sisvida codes
+5. Server fills biochemistry form in Sisvida system
+6. Server sends acknowledgment back to analyzer
+7. Connection is maintained for additional messages
+
+Error Handling:
+- Invalid messages receive negative acknowledgment (NACK)
+- Missing parameters are logged but don't stop processing
+- Browser errors are captured with screenshots
+- Failed submissions are retried automatically
+
+Server Configuration:
+- Default port: 8081 (configurable via URIT8031_PORT environment variable)
+- Protocol: TCP
+- Character encoding: ASCII
+- Message termination: \r (carriage return)
+- Acknowledgment: HL7 ACK message
+
+Integration with Sisvida:
+- Automatically searches for patient by sample ID
+- Navigates to biochemistry section (BIOQUÍMICA setor)
+- Fills form fields with mapped parameter values
+- Saves form and closes browser session
+- Provides error handling and retry mechanisms
+
